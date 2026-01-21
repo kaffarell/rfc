@@ -1,0 +1,42 @@
+[package]
+name = "rfc"
+version = "0.1.0"
+edition = "2021"
+description = "A CLI tool to search, retrieve, and display IETF RFCs and drafts"
+license = "BSD-3-Clause"
+authors = ["Trey Aspelund"]
+
+[dependencies]
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTML to text conversion (fallback for drafts without plain text)
+html2text = "0.16"
+
+# URL encoding
+urlencoding = "2"
+
+# Platform-specific directories
+directories = "5"
+
+# Error handling
+anyhow = "1"
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Temp files for editor support
+tempfile = "3"
+
+[dev-dependencies]
+tokio-test = "0.4"
