@@ -32,8 +32,6 @@ pub struct SearchResult {
     pub documents: Vec<Document>,
     /// Whether there are more results available
     pub has_more: bool,
-    /// Total number of matching documents available (from API)
-    pub total_count: Option<u32>,
     /// The query that produced these results
     pub query: String,
     /// The filter that was applied
@@ -46,7 +44,6 @@ impl SearchResult {
         Self {
             documents: Vec::new(),
             has_more: false,
-            total_count: None,
             query,
             filter,
         }

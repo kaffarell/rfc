@@ -23,8 +23,6 @@ struct SearchResponse {
 #[derive(Debug, Deserialize)]
 struct SearchMeta {
     #[serde(default)]
-    total_count: Option<u32>,
-    #[serde(default)]
     next: Option<String>,
 }
 
@@ -68,23 +66,53 @@ impl DataTrackerClient {
         // Request more results than needed since we filter locally
         // The API returns many document types we don't want (slides, reviews, etc.)
         let api_limit = limit.saturating_mul(5);
+        let encoded = urlencoding::encode(query);
 
-        // Search by title (not name) since that's where keywords like "bgp" appear
-        let mut url = format!(
-            "{}/api/v1/doc/document/?title__icontains={}&limit={}&format=json",
-            DATATRACKER_BASE_URL,
-            urlencoding::encode(query),
-            api_limit
+        let type_suffix = filter
+            .api_param()
+            .map(|t| format!("&type={}", t))
+            .unwrap_or_default();
+
+        let name_url = format!(
+            "{}/api/v1/doc/document/?name__icontains={}&limit={}&format=json{}",
+            DATATRACKER_BASE_URL, encoded, api_limit, type_suffix
+        );
+        let title_url = format!(
+            "{}/api/v1/doc/document/?title__icontains={}&limit={}&format=json{}",
+            DATATRACKER_BASE_URL, encoded, api_limit, type_suffix
         );
 
-        // Add type filter if specified
-        if let Some(type_param) = filter.api_param() {
-            url.push_str(&format!("&type={}", type_param));
-        }
+        let (name_resp, title_resp) =
+            tokio::try_join!(self.fetch_search(&name_url), self.fetch_search(&title_url))?;
 
+        let has_more = name_resp.meta.next.is_some() || title_resp.meta.next.is_some();
+
+        // Merge and deduplicate by name, preserving order (name results first)
+        let mut seen = std::collections::HashSet::new();
+        let documents: Vec<Document> = name_resp
+            .objects
+            .into_iter()
+            .chain(title_resp.objects)
+            .filter(|doc| Self::is_rfc_or_draft(&doc.name) && seen.insert(doc.name.clone()))
+            .map(|doc| self.convert_api_document(doc))
+            .take(limit as usize)
+            .collect();
+
+        let returned_count = documents.len() as u32;
+
+        Ok(SearchResult {
+            documents,
+            has_more: has_more || returned_count == limit,
+            query: query.to_string(),
+            filter,
+        })
+    }
+
+    /// Fetch a single search URL and return the parsed response
+    async fn fetch_search(&self, url: &str) -> Result<SearchResponse> {
         let response = self
             .client
-            .get(&url)
+            .get(url)
             .send()
             .await
             .context("Failed to send search request")?;
@@ -97,29 +125,10 @@ impl DataTrackerClient {
             );
         }
 
-        let search_response: SearchResponse = response
+        response
             .json()
             .await
-            .context("Failed to parse search response")?;
-
-        // Filter to only RFCs and drafts, then take up to the requested limit
-        let documents: Vec<Document> = search_response
-            .objects
-            .into_iter()
-            .filter(|doc| Self::is_rfc_or_draft(&doc.name))
-            .map(|doc| self.convert_api_document(doc))
-            .take(limit as usize)
-            .collect();
-
-        let returned_count = documents.len() as u32;
-
-        Ok(SearchResult {
-            documents,
-            has_more: search_response.meta.next.is_some() || returned_count == limit,
-            total_count: search_response.meta.total_count,
-            query: query.to_string(),
-            filter,
-        })
+            .context("Failed to parse search response")
     }
 
     /// Check if a document name is an RFC or Internet-Draft

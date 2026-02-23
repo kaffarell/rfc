@@ -305,20 +305,10 @@ async fn search_documents(query: &str, limit: usize, filter: SearchFilter) -> Re
 
     let shown = results.len();
 
-    // Report results with total count if available
-    if let Some(total) = results.total_count {
-        if results.has_more {
-            println!("\nShowing {} of {} results (use -l to show more):\n", shown, total);
-        } else {
-            println!("\nFound {} results:\n", total);
-        }
+    if results.has_more {
+        println!("\nShowing {} results (more available, use -l to show more):\n", shown);
     } else {
-        // Fallback if total count not available
-        if results.has_more {
-            println!("\nShowing {} results (more available, use -l to show more):\n", shown);
-        } else {
-            println!("\nFound {} results:\n", shown);
-        }
+        println!("\nFound {} results:\n", shown);
     }
 
     // Calculate max name width for alignment (80 char total line width)
